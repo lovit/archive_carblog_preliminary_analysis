@@ -14,7 +14,7 @@ def parse_subwords(corpus_fnames, model_directory, soynlp_path, min_frequency, s
         return False
     
     for n_corpus, fname in enumerate(corpus_fnames):        
-        corpus_index = fname.split('/')[-1].split('_')[0]
+        corpus_index = fname.split('/')[-1].split('.')[0]
         corpus = DoublespaceLineCorpus(fname, iter_sent=False)
         model_fname = '{}/{}_subword_statistics.pkl'.format(model_directory, corpus_index)        
         
@@ -97,7 +97,7 @@ def _word_extraction(corpus, subword_max_length, word_scores):
 def make_universial_vocabulary(corpus_fnames, model_directory, min_frequency):
     universial_subwords = set()
     for n_corpus, fname in enumerate(corpus_fnames):
-        corpus_index = fname.split('/')[-1].split('_')[0]
+        corpus_index = fname.split('/')[-1].split('.')[0]
         model_fname = '{}/{}_subword_statistics.pkl'.format(model_directory, corpus_index)
         with open(model_fname, 'rb') as f:        
             params = pickle.load(f)
@@ -151,7 +151,7 @@ def main():
     
     args = parser.parse_args()
     
-    corpus_fnames = sorted(glob('{}/*_text'.format(args.corpus_directory)))
+    corpus_fnames = sorted(glob('{}/*.txt'.format(args.corpus_directory)))
     model_directory = args.model_directory
     soynlp_path = args.soynlp_path
     min_frequency = args.min_frequency
