@@ -142,7 +142,7 @@ def main():
     parser.add_argument('--soynlp_path', type=str, default='./', help='soynlp package path')
     parser.add_argument('--min_frequency', type=int, default=100, help='minimum frequency for universial vocabulary construction')
     parser.add_argument('--subword_max_length', type=int, default=8, help='maximum length of left-side subsection (subword)')
-    parser.add_argument('--minimum_droprate_score', type=float, default=0.3, help='minimum #(w[:-1]) / #(w)')
+    parser.add_argument('--minimum_droprate_score', type=float, default=0.4, help='minimum #(w[:-1]) / #(w)')
     
     args = parser.parse_args()
     
