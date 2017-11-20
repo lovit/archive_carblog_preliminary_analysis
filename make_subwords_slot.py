@@ -4,7 +4,7 @@ import sys
 import numpy as np
 from glob import glob
 
-def parse_subwords(corpus_fnames, model_directory, soynlp_path, min_frequency, subword_max_length, minimum_droprate_score):
+def parse_subwords(corpus_fnames, model_directory, soynlp_path, min_frequency, subword_max_length):
     try:
         sys.path.append(soynlp_path)
         from soynlp.utils import DoublespaceLineCorpus
@@ -20,20 +20,18 @@ def parse_subwords(corpus_fnames, model_directory, soynlp_path, min_frequency, s
         
         L, df_subword, n_doc = _subword_counting(corpus, subword_max_length)
         cohesions, droprate_scores = _word_scoring(L, min_frequency)
-        df_word = _word_extraction(corpus, subword_max_length, droprate_scores, minimum_droprate_score)
-        _save(model_fname, L, df_subword, df_word, cohesions, droprate_scores, n_doc)
+        _save(model_fname, L, df_subword, cohesions, droprate_scores, n_doc)
         
         print('\r  - scanning and computation were done {} / {}, used memory = {} Gb'.format(n_corpus+1, len(corpus_fnames), ' %.3f'%get_process_memory()))        
-        del cohesions, droprate_scores, df_subword, df_word, L
+        del cohesions, droprate_scores, df_subword, L
         
     print('  subword parsing was done')
     return True
 
-def _save(model_fname, L, df_subword, df_word, cohesions, droprate_scores, n_doc):
+def _save(model_fname, L, df_subword, cohesions, droprate_scores, n_doc):
     params = {
         'frequency':L,
         'document_frequency_subword':df_subword,
-        'document_frequency_word':df_word,
         'cohesion': cohesions,
         'droprate_score': droprate_scores,
         'num_doc': n_doc
@@ -73,31 +71,16 @@ def _word_scoring(L, min_frequency):
     droprate_scores = {word:1-score for word, score in droprate_scores.items() if len(word) > 1}
     return cohesions, droprate_scores
 
-def _word_extraction(corpus, subword_max_length, droprate_scores, minimum_droprate_score):
-    def tokenize(word):
-        words = [(word[:e], droprate_scores.get(word[:e], 0)) for e in range(2, min(subword_max_length, len(word))+1)]
-        words = [entry[0] for entry in words if entry[1] >= minimum_droprate_score]
-        return words
-    
-    df = {}
-    for n_doc, doc in enumerate(corpus):
-        words = [word for token in doc.split() for word in tokenize(token) if len(word) > 1]
-        words = {word for word in words if word}
-        for word in words:
-            df[word] = df.get(word, 0) + 1            
-        if n_doc % 1000 == 999:
-            print('\r  - word extraction ... {} docs'.format(n_doc+1), flush=True, end='')
-    return df
-
-def make_universial_vocabulary(corpus_fnames, model_directory, min_frequency):
+def make_universial_vocabulary(corpus_fnames, model_directory, min_frequency, minimum_droprate_score):
     universial_subwords = set()
     for n_corpus, fname in enumerate(corpus_fnames):
         corpus_index = fname.split('/')[-1].split('.')[0]
         model_fname = '{}/{}_subword_statistics.pkl'.format(model_directory, corpus_index)
         with open(model_fname, 'rb') as f:        
             params = pickle.load(f)
-            for subword, frequency in params['document_frequency_word'].items():
-                if frequency < min_frequency or len(subword) < 2:
+            L = params['frequency']
+            for subword, droprate in params['droprate_score'].items():
+                if L.get(subword,0) < min_frequency or len(subword) < 2 or droprate < minimum_droprate_score:
                     continue
                 universial_subwords.add(subword)
         print('  - cumulated {} corpus, {} subwords'.format(n_corpus+1, len(universial_subwords)))
@@ -107,6 +90,50 @@ def make_universial_vocabulary(corpus_fnames, model_directory, min_frequency):
         for subword in sorted(universial_subwords):
             f.write('{}\n'.format(subword))
     return universial_subwords
+
+def tokenize(corpus_fnames, model_directory, soynlp_path, subword_max_length, universial_vocabulary):
+    try:
+        sys.path.append(soynlp_path)
+        from soynlp.utils import DoublespaceLineCorpus
+        from soynlp.utils import get_process_memory
+    except Exception as e:
+        print('importing soynlp was failed {}'.format(str(e)))
+        return False
+    
+    for n_corpus, fname in enumerate(corpus_fnames):        
+        corpus_index = fname.split('/')[-1].split('.')[0]
+        corpus = DoublespaceLineCorpus(fname, iter_sent=False)
+        model_fname = '{}/{}_subword_statistics.pkl'.format(model_directory, corpus_index)        
+        df_word = _tokenize(corpus, subword_max_length, universial_vocabulary)
+        
+        with open(model_fname, 'rb') as f:
+            params = pickle.load(f)
+        params['document_frequency_word'] = df_word
+        with open(model_fname, 'wb') as f:
+            pickle.dump(params, f)
+            
+        del df_word, params
+        
+        print('\r  - tokenizing was done {} / {}, used memory = {} Gb'.format(n_corpus+1, len(corpus_fnames), ' %.3f'%get_process_memory()))
+        
+    print('  tokenizing was done')
+    return True
+
+def _tokenize(corpus, subword_max_length, universial_vocabulary):
+    def tokenize(word):
+        words = [word[:e] for e in range(2, min(subword_max_length, len(word))+1)]
+        words = [word for word in words if word in universial_vocabulary]
+        return words
+    
+    df = {}
+    for n_doc, doc in enumerate(corpus):
+        words = [word for token in doc.split() for word in tokenize(token) if len(word) > 1]
+        words = {word for word in words if word}
+        for word in words:
+            df[word] = df.get(word, 0) + 1            
+        if n_doc % 1000 == 999:
+            print('\r  - tokenizing ... {} docs'.format(n_doc+1), flush=True, end='')
+    return df
 
 def make_subword_slot(universial_subwords, corpus_fnames, model_directory):
     subword2index = {subword:index for index, subword in enumerate(sorted(universial_subwords))}
@@ -165,10 +192,13 @@ def main():
         print(corpus_fname)
     
     print('begin parsing subwords')
-    parse_subwords(corpus_fnames, model_directory, soynlp_path, min_frequency, subword_max_length, minimum_droprate_score)
+    parse_subwords(corpus_fnames, model_directory, soynlp_path, min_frequency, subword_max_length)
     
     print('making universial vocabulary')
-    universial_subwords = make_universial_vocabulary(corpus_fnames, model_directory, min_frequency)
+    universial_subwords = make_universial_vocabulary(corpus_fnames, model_directory, min_frequency, minimum_droprate_score)
+    
+    print('word extraction with universial vocabulary')
+    tokenize(corpus_fnames, model_directory, soynlp_path, subword_max_length, universial_subwords)
     
     print('making subword slot')
     make_subword_slot(universial_subwords, corpus_fnames, model_directory)
