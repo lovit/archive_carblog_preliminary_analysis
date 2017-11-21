@@ -43,7 +43,7 @@ def main():
                         default=1.5,
                         help='entropy of (A? | A)'
                        )
-    parser.add_argument('--n_units_of_wpm',
+    parser.add_argument('--num_units_of_wpm',
                         type=int,
                         default=5000,
                         help='number of Word Piece Model units'
@@ -58,7 +58,7 @@ def main():
     subword_max_length = args.subword_max_length
     minimum_droprate_score = args.minimum_droprate_score
     minimum_branching_entropy = args.minimum_branching_entropy
-    n_units_of_wpm = args.n_units_of_wpm
+    num_units_of_wpm = args.num_units_of_wpm
                          
     print('{} corpus exist'.format(len(corpus_fnames)))
     for corpus_fname in corpus_fnames:
@@ -87,7 +87,7 @@ def main():
         builder = WordPieceModelBuilder(corpus_fnames,
                                         subword_max_length,
                                         tokenizer_fname,
-                                        num_units
+                                        num_units_of_wpm
                                        )
     
 if __name__ == "__main__":
