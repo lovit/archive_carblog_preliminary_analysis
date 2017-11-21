@@ -1,6 +1,12 @@
 import os
 import psutil
 
+def check_dirs(fname):
+    directory = '/'.join(fname.split('/')[:-1])
+    if directory and not os.path.exists(directory):
+        os.makedirs(directory)
+        print('created directory {}'.format(directory))
+
 def get_process_memory():
     """It returns the memory usage of current process"""
     
@@ -13,7 +19,7 @@ def print_subword_df_distribution(subword_slot, subword2index, words):
         if idx == -1: continue
         print('\n{}'.format(word), (100*subword_slot[idx,:]).max())
         print(100*subword_slot[idx,:])
-
+        
 class DoublespaceLineCorpus:    
     def __init__(self, corpus_fname, num_doc = -1, num_sent = -1, iter_sent = False, skip_header = 0):
         self.corpus_fname = corpus_fname
