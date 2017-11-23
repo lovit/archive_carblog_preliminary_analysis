@@ -99,6 +99,9 @@ def calculate_cooccurrence_document_frequency_ratio(category_sensitive_words_lis
     from collections import defaultdict
     
     for c, category_sensitive_words in enumerate(category_sensitive_words_list):
+        if len(category_sensitive_words) == 0:
+            print('category = {}, There are no category sensitive words here')
+            continue
         wc_occurrence = defaultdict(int) 
         cooccurrence = defaultdict(lambda: defaultdict(int))
         corpus_fname = '{}/{}.txt'.format(corpus_directory, c)
