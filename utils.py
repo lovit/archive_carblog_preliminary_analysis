@@ -19,7 +19,17 @@ def print_subword_df_distribution(subword_slot, subword2index, words):
         if idx == -1: continue
         print('\n{}'.format(word), (100*subword_slot[idx,:]).max())
         print(100*subword_slot[idx,:])
-        
+
+def read_list(fname):
+    with open(fname, 'r', encoding='utf-8') as f:
+        docs = [line.strip() for line in f]
+    return docs
+
+def remove_alphabet_number_comb(words):
+    import re
+    regex = '^[A-Z0-9]+$'
+    return [word for word in words if re.match(regex, word) is None]
+
 class DoublespaceLineCorpus:    
     def __init__(self, corpus_fname, num_doc = -1, num_sent = -1, iter_sent = False, skip_header = 0):
         self.corpus_fname = corpus_fname
