@@ -1,80 +1,75 @@
 class SubwordDocumentFrequencyHandler:
-    def __init__(self, corpus_directory, parameter_fname):
+    def __init__(self, parameter_fname):
         with open(parameter_fname, 'rb') as f:
             import pickle
             params = pickle.load(f)
         self.subword_slot = params['df']
         self.index2subword = params['index2subword']
         self.subword2index = {word:index for index,word in enumerate(self.index2subword)}
-        self.corpus_length = self._corpus_length(corpus_directory)
         self.num_words, self.num_categories = self.subword_slot.shape
         
-    def _corpus_length(self, corpus_directory):
-        import glob
-        files = glob.glob(corpus_directory + '*.txt')
-        files = sorted(files, key=lambda x: int(x.split('/')[-1].split('.')[0]))
-        
-        corpus_length = []
-        for file in files:
-            with open(corpus_directory+'/'+file, encoding='utf-8') as f:
-                corpus_length.append(len(f.readlines()))
-        return corpus_length
-    
-    def decode(self,idx):
+    def decode(self, idx):
         if 0 <= idx < self.num_words:
             return self.index2subword[idx]
         return None
     
-    def get_total_df_ratio_from_word(self, word):
-        idx = self.subword2index.get(word, -1)
-        return self.get_total_df_ratio_from_word_index(idx)
-        
-    def get_total_df_ratio_from_word_index(self, idx):
-        if idx == -1 : return None
-        total_freq = [w*l for w,l in zip(self.subword_slot[idx], self.corpus_length)]
-        return 100*sum(total_freq)/sum(self.corpus_length)
+    def encode(self, subword):
+        return self.subword2index.get(subword, -1)
     
-    def total_df_ratio_for_all_words(self):
-        total_df_ratio = []
-        for i in range(self.num_words):
-            print('\r  computing total df ratio {} / {}'.format(i+1, self.num_words), flush=True, end='')
-            total_df_ratio.append(self.get_total_df_ratio_from_word_index(i))
-        print('\r total df ratio computing was done.        ')
-        return total_df_ratio
-        
-def get_positive_words(positive_corpus,
-                       positive_total_df_ratio,
-                       reference_corpus,
-                       reference_total_df_ratio,
-                       min_percentage_of_positive_words,
-                       min_percentage_of_reference_words):
-    def is_int(word):
-        try:
-            word = int(word)
-            return True
-        except:
-            return False
-    positive_words = set([w for w, r in zip(positive_corpus.index2subword, positive_total_df_ratio) if r > min_percentage_of_positive_words and not is_int(w)])
-    reference_words = set([w for w, r in zip(reference_corpus.index2subword, reference_total_df_ratio) if r > min_percentage_of_reference_words and not is_int(w)])
-    filtered_positive_words = positive_words - reference_words
+    def get_df_distribution_statistics_from_word(self, word):
+        return self.get_df_distribution_statistics_from_word_index(self.encode(word))
     
-    return filtered_positive_words
+    def get_df_distribution_statistics_from_word_index(self, idx):
+        if idx == -1: return None
+        df_dist = self.subword_slot[idx,:]
+        return df_dist.std() / df_dist.mean(), df_dist.mean(), df_dist.max() / df_dist.mean(), df_dist.argmax()
+    
+    def get_df_distribution_statistics_of_all_words(self):
+        nstd_mean = {}
+        for idx in range(self.num_words):
+            if idx % 1000 == 999:
+                print('\r  computing (std/mean, mean, max/mean, argmax) {} / {}'.format(idx+1, self.num_words), flush=True, end='')
+            nstd_mean[self.decode(idx)] = self.get_df_distribution_statistics_from_word_index(idx)
+        print('\r computing (std/mean, mean, max/mean, argmax) was done.        ')
+        return nstd_mean
+        
+def get_positive_words(pos_nstd_mean,
+                       ref_nstd_mean,
+                       pos_max_df_nstd=1.0,
+                       pos_min_df_mean=0.005,
+                       ref_max_df_nstd=1.5,
+                       ref_min_df_mean=0.002):
+    
+    pos_positive = dict(filter(lambda x:(x[1][0]<pos_max_df_nstd and x[1][1]>pos_min_df_mean), pos_nstd_mean.items()),key=lambda x:x[1])
+    ref_positive = dict(filter(lambda x:(x[1][0]<ref_max_df_nstd and x[1][1]>ref_min_df_mean), ref_nstd_mean.items()),key=lambda x:x[1])
+    pos_filtered = {word:score for word, score in pos_positive.items() if not (word in ref_positive)}
+    return pos_positive, ref_positive, pos_filtered
 
-def index_to_categories(directory):
-    with open(directory, 'r', encoding='utf-8') as f:
-        categories = f.readlines()
-        categories = [c.strip() for c in categories]
-    return categories
+def pprint_word_list(word_list, cell_len=8, n_cols=5):
+    n = len(word_list)
+    form = '%{}s'.format(cell_len)
+    for i in range(round(n/n_cols)):
+        print('\t'.join([form % w for w in word_list[n_cols*i: n_cols*(i+1)]]))
 
-def get_category_sensitive_words_list(positive_corpus, index_to_categories, max_average_ratio):
-    category_sensitive_words = {i:[] for i in range(len(index_to_categories))}
-    for index, df_dist in enumerate(positive_corpus.subword_slot):
-        if df_dist.max()/df_dist.mean() > max_average_ratio:
-            category_index = df_dist.argmax()
-            word = positive_corpus.decode(index)
-            category_sensitive_words[category_index].append(word)
-    category_sensitive_words = [set(words) for c, words in sorted(category_sensitive_words.items())]
-    return category_sensitive_words
+def get_category_sensitive_words(pos_handler,
+                                 pos_statistics,
+                                 pos_min_df_nstd=2.5,
+                                 pos_df_max_mean=0.01,
+                                 pos_min_of_df_mean_ratio=3
+                                ):
+    word_by_category = [[] for _ in range(pos_handler.num_categories)]
+    for subword, (nstd, mean, topmean, max_sensitive_category) in pos_statistics.items():
+        if nstd < pos_min_df_nstd:
+            continue
+        if mean > pos_df_max_mean:
+            continue
+        idx = pos_handler.encode(subword)
+        df_dist = pos_handler.subword_slot[idx,:]
+        sensitive_categories = [i for i, r in enumerate(df_dist/mean) if r >= pos_min_of_df_mean_ratio]
+        for c in sensitive_categories:
+            word_by_category[c].append(subword)
+    return word_by_category
+
 
 def is_co_occurred(wc, wf, doc):
     return 1 if ' '+wc in ' '+doc and ' '+wf in ' '+doc else 0
