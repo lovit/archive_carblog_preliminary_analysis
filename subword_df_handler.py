@@ -50,22 +50,3 @@ def pprint_word_list(word_list, cell_len=8, n_cols=5):
     form = '%{}s'.format(cell_len)
     for i in range(round(n/n_cols)):
         print('\t'.join([form % w for w in word_list[n_cols*i: n_cols*(i+1)]]))
-
-def get_category_sensitive_words(pos_handler,
-                                 pos_statistics,
-                                 pos_min_df_nstd=2.5,
-                                 pos_df_max_mean=0.01,
-                                 pos_min_of_df_mean_ratio=3
-                                ):
-    word_by_category = [[] for _ in range(pos_handler.num_categories)]
-    for subword, (nstd, mean, topmean, max_sensitive_category) in pos_statistics.items():
-        if nstd < pos_min_df_nstd:
-            continue
-        if mean > pos_df_max_mean:
-            continue
-        idx = pos_handler.encode(subword)
-        df_dist = pos_handler.subword_slot[idx,:]
-        sensitive_categories = [i for i, r in enumerate(df_dist/mean) if r >= pos_min_of_df_mean_ratio]
-        for c in sensitive_categories:
-            word_by_category[c].append(subword)
-    return word_by_category
