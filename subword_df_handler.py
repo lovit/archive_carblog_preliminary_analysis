@@ -44,9 +44,3 @@ def extract_positive_words(pos_nstd_mean,
     ref_positive = dict(filter(lambda x:(x[1][0]<ref_max_df_nstd_mean and x[1][1]>ref_min_df_mean), ref_nstd_mean.items()))
     pos_filtered = {word:score for word, score in pos_positive.items() if not (word in ref_positive)}
     return pos_positive, ref_positive, pos_filtered
-
-def pprint_word_list(word_list, cell_len=8, n_cols=5):
-    n = len(word_list)
-    form = '%{}s'.format(cell_len)
-    for i in range(round(n/n_cols)):
-        print('\t'.join([form % w for w in word_list[n_cols*i: n_cols*(i+1)]]))
