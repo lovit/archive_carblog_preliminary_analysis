@@ -33,15 +33,15 @@ class SubwordDocumentFrequencyHandler:
         print('\r computing (std/mean, mean, max/mean, argmax) was done.        ')
         return nstd_mean
         
-def get_positive_words(pos_nstd_mean,
-                       ref_nstd_mean,
-                       pos_max_df_nstd=1.0,
-                       pos_min_df_mean=0.005,
-                       ref_max_df_nstd=1.5,
-                       ref_min_df_mean=0.002):
+def extract_positive_words(pos_nstd_mean,
+                           ref_nstd_mean,
+                           pos_max_df_nstd_mean=1.0,
+                           pos_min_df_mean=0.005,
+                           ref_max_df_nstd_mean=1.5,
+                           ref_min_df_mean=0.002):
     
-    pos_positive = dict(filter(lambda x:(x[1][0]<pos_max_df_nstd and x[1][1]>pos_min_df_mean), pos_nstd_mean.items()),key=lambda x:x[1])
-    ref_positive = dict(filter(lambda x:(x[1][0]<ref_max_df_nstd and x[1][1]>ref_min_df_mean), ref_nstd_mean.items()),key=lambda x:x[1])
+    pos_positive = dict(filter(lambda x:(x[1][0]<pos_max_df_nstd_mean and x[1][1]>pos_min_df_mean), pos_nstd_mean.items()))
+    ref_positive = dict(filter(lambda x:(x[1][0]<ref_max_df_nstd_mean and x[1][1]>ref_min_df_mean), ref_nstd_mean.items()))
     pos_filtered = {word:score for word, score in pos_positive.items() if not (word in ref_positive)}
     return pos_positive, ref_positive, pos_filtered
 
