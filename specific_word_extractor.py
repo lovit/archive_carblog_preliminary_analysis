@@ -1,3 +1,8 @@
+from collections import defaultdict
+import datetime
+import os
+import time
+
 # Step 2. Extracting sensitive words for each category
 def extract_category_sensitive_words(pos_handler,
                                  pos_statistics,
