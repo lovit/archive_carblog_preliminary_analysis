@@ -45,9 +45,8 @@ def _calculate_cooccurrence_df(D_sensitive, D_positive, corpus_fname, debug=Fals
                 else:
                     continue
                 for w_pos in D_positive:
-                    if not does_cooccurred(w_sens, w_pos, doc):
-                        continue
-                    cooccurrence_dd[w_sens][w_pos] += 1
+                    if w_pos in doc:
+                        cooccurrence_dd[w_sens][w_pos] += 1
             if debug and i_doc >= 500: break
             if i_doc % 10 == 9:
                 print('\r  - calculating cooccurrence ... {} docs'.format(i_doc+1), flush=True, end='')
