@@ -27,7 +27,7 @@ def read_list(fname):
 
 def remove_alphabet_number_comb(words):
     import re
-    regex = '^[A-Z0-9]+$'
+    regex = '^[a-zA-Z0-9]+$'
     return [word for word in words if re.match(regex, word) is None]
 
 def pprint_word_list(word_list, cell_len=8, n_cols=5):
