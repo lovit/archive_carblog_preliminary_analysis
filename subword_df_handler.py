@@ -112,3 +112,60 @@ def create_subword_frequency_matrix(sensitive_words_by_category, common_words, s
         x_fname = '{}/subword_tf_c{}.mtx'.format(model_directory, c)
         mmwrite(x_fname, x)
         del x
+
+# Step 3 - 1 Select specific terms using related term graph
+def select_specific_words(W_ij, sensitive_words, common_words, cost_factor=1.0, cutoff=0.05):
+    def specific_score(word, cost, normalizer):
+        pos, neg = (0, 0)
+        related_words = W_ij.get(word, [])
+        if not related_words:
+            return 0, False
+        for context, score, freq in related_words:
+            if context in common_words:
+                neg += score
+            else:
+                pos += score
+        return normalizer * (cost * pos - neg), True
+    
+    cost = cost_factor * len(common_words) / (1+len(sensitive_words))
+    normalizer_factor = 1 / (len(sensitive_words) + len(common_words))
+    
+    scored = [(word, *specific_score(word, cost, normalizer_factor)) for word in sensitive_words]
+    has_no_relateds = [(t[0], 0) for t in scored if not t[2]]
+    scored = [(t[0], t[1]) for t in scored if t[2]]
+    true_specific = [t for t in scored if t[1] >= cutoff]
+    true_specific = sorted(true_specific, key=lambda x:-x[1])
+    false_specific = [t for t in scored if t[1] < cutoff]
+    false_specific = sorted(false_specific, key=lambda x:-x[1])
+    return true_specific, false_specific, has_no_relateds
+
+# Step 4. Document classification
+def classify_documents(x, positive_features, negative_features, negative_score_factor=1.0):
+    n, m = x.shape
+    factor = negative_score_factor * len(negative_features) / len(positive_features)
+    
+    rows, cols = x.nonzero()
+    data = x.data
+    scores = [0]*n
+    unknown_features = [0]*n
+    num_features = [0]*n
+    normalizer = [0]*n
+    
+    n_entry = len(rows)
+    for i_entry, (i,j,d) in enumerate(zip(rows, cols, data)):
+        if i_entry % 5000 == 4999:
+            print('\r  - computing ... {} % entries'.format('%.2f'%(100*(i_entry+1)/n_entry)), flush=True, end='')
+        num_features[i] = num_features[i] + d
+        if j in positive_features:
+            scores[i] = scores[i] + d
+            normalizer[i] = normalizer[i] + d
+        if j in negative_features:
+            scores[i] = scores[i] - (factor * d)
+            normalizer[i] = normalizer[i] + (factor * d)
+        if not (j in positive_features or j in negative_features):
+            unknown_features[i] = unknown_features[i] + d
+            #scores[i] = scores[i] - d * factor
+    scores = [score/normalizer[i] if normalizer[i] > 0 else 0 for i,score in enumerate(scores)]
+    unknown_features = [num/num_features[i] for i,num in enumerate(unknown_features) if num_features[i] > 0]
+    print('\rclassification was done.{}'.format(' '*50))
+    return scores, num_features, unknown_features
