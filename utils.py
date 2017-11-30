@@ -37,6 +37,12 @@ def pprint_word_list(word_list, cell_len=8, n_cols=5):
     for i in range(round(n/n_cols)):
         print('\t'.join([form % w for w in word_list[n_cols*i: n_cols*(i+1)]]))
 
+def normalize(doc):
+    import re
+    pattern = re.compile('[^a-zA-Z0-9가-힣\s]')
+    doublespace_pattern = re.compile('\s+')
+    return doublespace_pattern.sub(' ',pattern.sub(' ', doc)).strip()
+        
 class DoublespaceLineCorpus:    
     def __init__(self, corpus_fname, num_doc = -1, num_sent = -1, iter_sent = False, skip_header = 0):
         self.corpus_fname = corpus_fname
