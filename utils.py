@@ -43,7 +43,7 @@ def normalize(doc):
     doublespace_pattern = re.compile('\s+')
     return doublespace_pattern.sub(' ',pattern.sub(' ', doc)).strip()
         
-class DoublespaceLineCorpus:    
+class DoublespaceLineCorpus:
     def __init__(self, corpus_fname, num_doc = -1, num_sent = -1, iter_sent = False, skip_header = 0):
         self.corpus_fname = corpus_fname
         self.num_doc = 0
