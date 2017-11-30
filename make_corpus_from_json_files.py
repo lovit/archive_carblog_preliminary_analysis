@@ -20,23 +20,23 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--json_directory', type=str, default='./', help='json file directory')
     parser.add_argument('--corpus_directory', type=str, default='./', help='corpus directory')
-
+    
     args = parser.parse_args()
     corpus_directory = args.corpus_directory
-    monthly_directories = glob('{}/*/*/*'.format(args.json_directory))
+    month_directories = glob('{}/*/*/*'.format(args.json_directory)) # root/category/year/month
     
     import os
-    if not os.path.exist(corpus_directory):
+    if not os.path.exists(corpus_directory):
         os.makedirs(corpus_directory)
         print('created directory {}'.format(corpus_directory))
     
-    for n_corpus, monthly_directory in enumerate(monthly_directories):
-        corpus_name = '-'.join(monthly_directory.split('/')[-3:])    
+    for n_corpus, month_directory in enumerate(month_directories):
+        corpus_name = '-'.join(month_directory.split('/')[-3:])
         corpus_fname = '{}/{}.txt'.format(corpus_directory, corpus_name)
         index_fname = '{}/{}.index'.format(corpus_directory, corpus_name)
         with open(corpus_fname, 'w', encoding='utf-8') as fc:
             with open(index_fname, 'w', encoding='utf-8') as fi:
-                json_fnames = glob('{}/*/*.json'.format(monthly_directory))
+                json_fnames = glob('{}/*/*.json'.format(month_directory)) # month/date/json
                 for i, json_fname in enumerate(json_fnames):
                     with open(json_fname, encoding='utf-8') as f:
                         json_object = json.load(f)
