@@ -142,7 +142,7 @@ def select_specific_words(W_ij, sensitive_words, common_words, cost_factor=1.0, 
 # Step 4. Document classification
 def classify_documents(x, positive_features, negative_features, negative_score_factor=1.0):
     n, m = x.shape
-    factor = negative_score_factor * len(negative_features) / len(positive_features)
+    factor = negative_score_factor * len(positive_features) / len(negative_features)
     
     rows, cols = x.nonzero()
     data = x.data
