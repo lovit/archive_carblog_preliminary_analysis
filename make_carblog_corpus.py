@@ -39,15 +39,18 @@ def main():
             with open(index_fname, 'w', encoding='utf-8') as fi:
                 json_fnames = glob('{}/*/*.json'.format(car_root))
                 for i, json_fname in enumerate(json_fnames):
-                    with open(json_fname, encoding='utf-8') as f:
-                        json_object = json.load(f)
-                    if not json_object or type(json_object) != dict:
-                        continue
-                    corpus_content, index_content = parse(json_object)
-                    fc.write('{}\n'.format(corpus_content))
-                    fi.write('{}\n'.format(index_content))
                     if i % 200 == 199:
                         print('\rparsing ... directory = {}/{}, json = {}/{}{}'.format(i_corpus+1, len(car_directories), i+1, len(json_fnames), ' '*20), flush=True, end='')
+                    try:
+                        with open(json_fname, encoding='utf-8') as f:
+                            json_object = json.load(f)
+                        if not json_object or type(json_object) != dict:
+                            continue
+                        corpus_content, index_content = parse(json_object)
+                        fc.write('{}\n'.format(corpus_content))
+                        fi.write('{}\n'.format(index_content))
+                    except:
+                        continue
         print('\rparsing done. directory = {}/{}, {} complated {}'.format(i_corpus+1, len(car_directories), i+1, ' '*20))
 
 if __name__ == "__main__":

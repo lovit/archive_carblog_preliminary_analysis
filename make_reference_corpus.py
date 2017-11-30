@@ -38,13 +38,16 @@ def main():
             with open(index_fname, 'w', encoding='utf-8') as fi:
                 json_fnames = glob('{}/*/*.json'.format(month_directory)) # month/date/json
                 for i, json_fname in enumerate(json_fnames):
-                    with open(json_fname, encoding='utf-8') as f:
-                        json_object = json.load(f)
-                    corpus_content, index_content = parse(json_object)
-                    fc.write('{}\n'.format(corpus_content))
-                    fi.write('{}\n'.format(index_content))
                     if i % 200 == 199:
                         print('\rparsing ... directory = {}/{}, json = {}/{}{}'.format(n_corpus+1, len(monthly_directories), i+1, len(json_fnames), ' '*20), flush=True, end='')
+                    try:
+                        with open(json_fname, encoding='utf-8') as f:
+                        json_object = json.load(f)
+                        corpus_content, index_content = parse(json_object)
+                        fc.write('{}\n'.format(corpus_content))
+                        fi.write('{}\n'.format(index_content))
+                    except:
+                        continue
         print('\rparsing done. directory = {}/{} {}'.format(n_corpus+1, len(monthly_directories), ' '*20))
 
 if __name__ == "__main__":
