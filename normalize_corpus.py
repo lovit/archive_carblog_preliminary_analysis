@@ -5,8 +5,8 @@ from utils import normalize
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument('--raw_corpus_directory', type=str, default='./corpus0', help='json file directory')
-    parser.add_argument('--normalized_corpus_directory', type=str, default='./corpus0_norm/', help='corpus directory')
+    parser.add_argument('--raw_corpus_directory', type=str, default='./corpus0', help='raw corpus directory')
+    parser.add_argument('--normalized_corpus_directory', type=str, default='./corpus0_norm/', help='only Hangle, Alphabet, and number corpus directory')
     
     args = parser.parse_args()
     raw_corpus_directory = args.raw_corpus_directory
