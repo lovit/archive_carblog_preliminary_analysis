@@ -28,7 +28,7 @@ class SubwordDocumentFrequencyHandler:
         nstd_mean = {}
         for idx in range(self.num_words):
             if idx % 1000 == 999:
-                print('\r  computing (std/mean, mean, max/mean, argmax) {} / {}'.format(idx+1, self.num_words), flush=True, end='')
+                print('\r  - computing (std/mean, mean, max/mean, argmax) {} / {}'.format(idx+1, self.num_words), flush=True, end='')
             nstd_mean[self.decode(idx)] = self.get_df_distribution_statistics_from_word_index(idx)
         print('\r computing (std/mean, mean, max/mean, argmax) was done.        ')
         return nstd_mean
@@ -65,6 +65,7 @@ def extract_category_sensitive_words(pos_handler, pos_statistics, min_nstd=2.5, 
 from scipy.sparse import csr_matrix
 
 def _subword_frequency_matrix(corpus_fname, subword_set, subword2index, debug=False):
+    from collections import Counter
     def tokenize_subword(token, max_length=8):
         subwords = [token[:e] for e in range(2, min(len(token), max_length)+1)]
         subwords = [subword for subword in subwords if subword in subword_set]
@@ -92,12 +93,14 @@ def _subword_frequency_matrix(corpus_fname, subword_set, subword2index, debug=Fa
     return x
 
 def create_subword_frequency_matrix(category_sensitive_words, common_words, subword2index, corpus_directory, model_directory, debug=False):
+    from scipy.io import mmwrite
     num_categories = len(category_sensitive_words)
     for c, sensitive_words in enumerate(category_sensitive_words):
         if debug and c >= 3: 
             break
         
         corpus_fname = '{}/{}.txt'.format(corpus_directory, c)
+        print('\ncorpus to tokenized = {}'.format(corpus_fname))
         
         subword_set = {word for word in common_words}
         subword_set.update({word for word in sensitive_words})
@@ -105,14 +108,14 @@ def create_subword_frequency_matrix(category_sensitive_words, common_words, subw
         x_fname = '{}/positive_subword_tf_c{}.mtx'.format(model_directory, c)
         mmwrite(x_fname, x)
         del x
-        print('\rcreated positive subword frequency matrix in {} / {} corpus'.format(c, n_categories), flush=True)
+        print('\rcreated positive subword frequency matrix in {} / {} corpus'.format(c, num_categories), flush=True)
         
         subword_set = {word for word in subword2index}
         x = _subword_frequency_matrix(corpus_fname, subword_set, subword2index, debug)
         x_fname = '{}/subword_tf_c{}.mtx'.format(model_directory, c)
         mmwrite(x_fname, x)
         del x
-        print('\rcreated subword frequency matrix in {} / {} corpus'.format(c, n_categories), flush=True)
+        print('\rcreated subword frequency matrix in {} / {} corpus'.format(c, num_categories), flush=True)
 
 # Step 3 - 1 Select specific terms using related term graph
 def select_specific_words(W_ij, sensitive_words, common_words, cost_factor=1.0, cutoff=0.05):
