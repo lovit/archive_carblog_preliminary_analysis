@@ -42,6 +42,21 @@ def normalize(doc):
     pattern = re.compile('[^a-zA-Z0-9가-힣\s]')
     doublespace_pattern = re.compile('\s+')
     return doublespace_pattern.sub(' ',pattern.sub(' ', doc)).strip()
+
+def make_bow(doc, x, remove_alphabet_number_comb=True, topk=30):
+    import re
+    regex = '^[a-zA-Z0-9ㄱ-ㅎㅏ-ㅣ]+$'
+    
+    bow = x[doc,:]
+    term = bow.nonzero()[1]
+    data = bow.data
+    bow = sorted([(t,tf) for t,tf in zip(term, data)], key=lambda x:-x[1])
+    bow = [(index2subword[t],tf) for t,tf in bow]
+    if remove_alphabet_number_comb:        
+        bow = [(t,tf) for t,tf in bow if not re.match(regex, t)]
+    if topk > 0:
+        bow = bow[:topk]
+    return bow
         
 class DoublespaceLineCorpus:
     def __init__(self, corpus_fname, num_doc = -1, num_sent = -1, iter_sent = False, skip_header = 0):
