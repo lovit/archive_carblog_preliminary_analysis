@@ -43,7 +43,7 @@ def normalize(doc):
     doublespace_pattern = re.compile('\s+')
     return doublespace_pattern.sub(' ',pattern.sub(' ', doc)).strip()
 
-def make_bow(doc, x, remove_alphabet_number_comb=True, topk=30):
+def make_bow(doc, x, index2subword, remove_alphabet_number_comb=True, topk=30):
     import re
     regex = '^[a-zA-Z0-9ㄱ-ㅎㅏ-ㅣ]+$'
     
