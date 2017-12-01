@@ -67,14 +67,23 @@ def main():
     ref_subword_handler = SubwordDocumentFrequencyHandler(reference_parameter_fname)
     ref_statistics = ref_subword_handler.get_df_distribution_statistics_of_all_words()
     pos_positive, ref_positive, pos_filtered = extract_positive_words(pos_statistics, ref_statistics, pos_max_df_nstd_mean, pos_min_df_mean, ref_max_df_nstd_mean, ref_min_df_mean)
+    
+    print('  - num reference subwords  = {}'.format(len(ref_positive)))
+    print('  - num positive candidates = {}'.format(len(pos_positive)))
+    print('  - num positive subwords   = {}'.format(len(pos_filtered)))
 
     # Step 2
     print('{}\nStep 2. Extract category - sensitive subwords'.format('#'*80))
     category_sensitive_words = extract_category_sensitive_words(pos_subword_handler, pos_statistics, sensitive_min_nstd, sensitive_max_mean, sensitive_min_ratio)
+    
     with open('{}/common_words.pkl'.format(model_directory), 'wb') as f:
         pickle.dump(pos_positive,f)    
     with open('{}/category_sensitive_words.pkl'.format(model_directory), 'wb') as f:
         pickle.dump(category_sensitive_words,f)
+        
+    print('  - num category sensitive words')
+    for c, sensitive_words in enumerate(category_sensitive_words):
+        print('    - category {} has {} sensitives'.format(c, len(sensitive_words)))
     
     # Step 3 - 0: create subword frequency matrix
     if TOKENIZE:
