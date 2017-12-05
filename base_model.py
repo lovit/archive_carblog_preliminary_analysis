@@ -82,15 +82,15 @@ def main():
         for c in range(num_categories):
             if DEBUG and c == 3:
                 break
-            mm_indi_fname = '{}/{}_{}.mtx'.format(model_directory, mm_file_header, c)
+            mm_indi_fname = '{}/{}_c{}.mtx'.format(model_directory, mm_file_header, c)
             print('Do kmeans with category = {} term frequency matrix'.format(c))
             do_kmeans(mm_indi_fname, k_array, DEBUG)
     
     # Merge corpus
     if KMEANS_WHOLE:
-        mm_whole_fname = '{}/{}_whole.mtx'.format(mm_file_header, model_directory)
+        mm_whole_fname = '{}/{}_whole.mtx'.format(model_directory, mm_file_header)
         if not os.path.exists(mm_whole_fname):
-            if not os.path.exists('{}/{}_0.mtx'.format(mm_file_header, model_directory)):
+            if not os.path.exists('{}/{}_c0.mtx'.format(mm_file_header, model_directory)):
                 print('Matrix market file of individual category does not exist\nTerminate process')
                 return None
             merge_mm(model_directory, num_categories, mm_file_header)
@@ -228,7 +228,7 @@ def merge_mm(model_directory, num_categories, mm_file_header):
 
 def do_kmeans(mm_fname, k_array, DEBUG):
     def _do_kmeans(x, k):
-        kmeans = KMeans(n_clusters=k, init='k-means++', n_init=1, max_iter=15)
+        kmeans = KMeans(n_clusters=k, n_init=1, max_iter=15)
         return kmeans.fit_predict(x)
     def _write_result(fname, labels):
         with open(fname, 'w', encoding='utf-8') as fo:
@@ -243,8 +243,7 @@ def do_kmeans(mm_fname, k_array, DEBUG):
         if DEBUG and i_k == 3:
             break
         print('  - k-means (tf) begin k={} ... '.format(k), flush=True, end='')
-        kmeans = KMeans(n_clusters=k, n_init=1, max_iter=20)
-        labels = kmeans.fit_predict(x)
+        labels = _do_kmeans(x, k)
         labels_fname = '{}/cluster_label_tf_{}_k{}.txt'.format(model_directory, mm_name, k)
         _write_result(labels_fname, labels)
         print('done, mem={} Gb'.format('%.2f'%get_process_memory()), flush=True)
@@ -256,8 +255,7 @@ def do_kmeans(mm_fname, k_array, DEBUG):
         if DEBUG and i_k == 3:
             break
         print('  - k-means (tf-idf) begin k={} ... '.format(k), flush=True, end='')
-        kmeans = KMeans(n_clusters=k, n_init=1, max_iter=20)
-        labels = kmeans.fit_predict(x)
+        labels = _do_kmeans(x, k)
         labels_fname = '{}/cluster_label_tfidf_{}_k{}.txt'.format(model_directory, mm_name, k)
         _write_result(labels_fname, labels)
         print('done, mem={} Gb'.format('%.2f'%get_process_memory()), flush=True)
