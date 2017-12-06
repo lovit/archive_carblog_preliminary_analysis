@@ -31,6 +31,7 @@ def main():
     
     parser.add_argument('--do_indi_kmeans', dest='KMEANS_INDI', action='store_true', help='category individual clustering')
     parser.add_argument('--do_whole_kmeans', dest='KMEANS_WHOLE', action='store_true', help='category individual clustering')
+    parser.add_argument('--kmeans_n_jobs', type=int, default=4, help='minimum term frequency for each category')
     parser.add_argument('--k_array', type=str, default='2_5_10_20_50_100', help='k values 2_5_10 format')
 
     ###################
@@ -50,6 +51,7 @@ def main():
     
     KMEANS_INDI = args.KMEANS_INDI
     KMEANS_WHOLE = args.KMEANS_WHOLE
+    kmeans_n_jobs = args.kmeans_n_jobs
     k_array = [int(k) for k in args.k_array.split('_')]
     ###################
     
@@ -84,7 +86,7 @@ def main():
                 break
             mm_indi_fname = '{}/{}_c{}.mtx'.format(model_directory, mm_file_header, c)
             print('Do kmeans with category = {} term frequency matrix'.format(c))
-            do_kmeans(mm_indi_fname, k_array, DEBUG)
+            do_kmeans(mm_indi_fname, k_array, kmeans_n_jobs, DEBUG)
     
     # Merge corpus
     if KMEANS_WHOLE:
@@ -95,7 +97,7 @@ def main():
                 return None
             merge_mm(model_directory, num_categories, mm_file_header)
         print('Do kmeans with merged term frequency matrix')
-        do_kmeans(mm_whole_fname, k_array, DEBUG)
+        do_kmeans(mm_whole_fname, k_array, kmeans_n_jobs, DEBUG)
     
 def tokenize(corpus_directory, tokenized_corpus_directory, tokenizer):
     def normalize(doc):
@@ -226,9 +228,9 @@ def merge_mm(model_directory, num_categories, mm_file_header):
             print('  - merged {}'.format(indi_mm_fname))
     print('All corpus was merged')
 
-def do_kmeans(mm_fname, k_array, DEBUG):
+def do_kmeans(mm_fname, k_array, kmeans_n_jobs, DEBUG):
     def _do_kmeans(x, k):
-        kmeans = KMeans(n_clusters=k, n_init=1, max_iter=15)
+        kmeans = KMeans(n_clusters=k, n_init=1, max_iter=15, n_jobs=kmeans_n_jobs)
         return kmeans.fit_predict(x)
     def _write_result(fname, labels):
         with open(fname, 'w', encoding='utf-8') as fo:
