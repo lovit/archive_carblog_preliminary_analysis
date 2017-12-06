@@ -78,7 +78,7 @@ def make_centroid_vector(mm_fname, cluster_label_fname):
     
     for group, rows in sorted(groupby.items()):
         x_sub = x[rows,:]
-        centroid = x.sum(axis=0)
+        centroid = x_sub.sum(axis=0)
         centroid_norm = normalize(centroid)
         
         centroid_array.append(centroid)
