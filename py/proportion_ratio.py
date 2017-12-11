@@ -44,3 +44,47 @@ def compute_a_proportion_ratio(x, seed_nodes, context_nodes, minimum_proportion_
             print('\r{} % ({} in {})'.format('%.2f'%(100*(n_w_i+1)/n), n_w_i, n), end='', flush=True)
     print('\rconstructing was done.', flush=True)
     return W_ij
+
+def row_labeling(x_frequency, minimum_proportion_ratio=0.7, minimum_frequency=10, verbose=False):
+    global_frequency = x.sum(axis=0).tolist()[0]
+    global_sum = sum(global_frequency)
+    
+    W_ij = {}
+    
+    for i, positive_frequency in _as_dict(x_frequency).items():
+        pos_sum = sum(positive_frequency.values())
+        neg_sum = global_sum - pos_sum
+        
+        scores = []
+        for j, freq_pos in positive_frequency.items():
+            if freq_pos < minimum_frequency:
+                continue
+
+            freq_neg = global_frequency[j] - freq_pos
+            pos_p = freq_pos / pos_sum
+            neg_p = freq_neg / neg_sum
+            
+            proportion_ratio = pos_p / (pos_p + neg_p)
+            if proportion_ratio < minimum_proportion_ratio:
+                continue
+            
+            scores.append((j, proportion_ratio, freq_pos))
+
+        if not scores:
+            continue
+        W_ij[i] = tuple(sorted(scores, key=lambda x:-x[1]))
+
+        if verbose:
+            print('\r{} % ({} in {})'.format('%.2f'%(100*(n_w_i+1)/n), n_w_i, n), flush=True, end='')
+    
+    print('\rconstructing was done.', flush=True)
+    return W_ij
+
+def _as_dict(x):
+    from collections import defaultdict
+    rows, cols = x.nonzero()
+    data = x.data
+    dd = defaultdict(lambda: {})
+    for i, j, d in zip(rows, cols, data):
+        dd[i][j] = d
+    return dict(dd)
