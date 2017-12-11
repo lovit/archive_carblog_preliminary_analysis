@@ -6,8 +6,8 @@ from subword_df_handler import SubwordDocumentFrequencyHandler
 from subword_df_handler import extract_positive_words
 from subword_df_handler import extract_category_sensitive_words
 from subword_df_handler import create_subword_frequency_matrix
-from utils import read_list
-from utils import remove_alphabet_number_comb
+from utils.utils import read_list
+from utils.utils import remove_alphabet_number_comb
 
 def main():
     parser = argparse.ArgumentParser()
