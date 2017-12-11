@@ -41,7 +41,7 @@ def main():
 
     parser.add_argument('--do_indi_analysis', dest='INDI_ANALYSIS', action='store_true')
     parser.add_argument('--do_whole_analysis', dest='WHOLE_ANALYSIS', action='store_true')
-    parser.add_argument('--centroid_minimum_df_ratio', type=float, default=0.03, help='minimum document frequency ratio for centroid term frequency vector')
+    parser.add_argument('--proportion_minimum_df_ratio', type=float, default=0.03, help='minimum document frequency ratio for term proportion vector')
     
     ###################
     #### PARAMETER ####
@@ -65,7 +65,7 @@ def main():
 
     INDI_ANALYSIS = args.INDI_ANALYSIS
     WHOLE_ANALYSIS = args.WHOLE_ANALYSIS
-    centroid_minimum_df_ratio = args.centroid_minimum_df_ratio
+    proportion_minimum_df_ratio = args.proportion_minimum_df_ratio
     ###################
     
     print('{}\nArguments'.format('#'*80))
@@ -98,7 +98,7 @@ def main():
             if DEBUG and c == 3:
                 break
             mm_indi_fname = '{}/{}_c{}.mtx'.format(model_directory, mm_file_header, c)
-            print('Do kmeans with category = {} term frequency matrix'.format(c))
+            print('Do kmeans with category = {}'.format(c))
             do_kmeans(mm_indi_fname, k_array, kmeans_n_jobs, DEBUG)
     
     # Merge corpus
@@ -109,14 +109,14 @@ def main():
                 print('Matrix market file of individual category does not exist\nTerminate process')
                 return None
             merge_mm(model_directory, num_categories, mm_file_header)
-        print('Do kmeans with merged term frequency matrix')
+        print('Do kmeans with merged x')
         do_kmeans(mm_whole_fname, k_array, kmeans_n_jobs, DEBUG)
     
-    # make centroids
+    # make proportion
     if INDI_ANALYSIS:
         for weight_type in ['tf', 'tfidf']:
             print('Do clustering result (indi) analysis {}'.format(weight_type))
-            indi_analysis(model_directory, mm_file_header, k_array, num_categories, weight_type, centroid_minimum_df_ratio, DEBUG)
+            indi_analysis(model_directory, mm_file_header, k_array, num_categories, weight_type, proportion_minimum_df_ratio, DEBUG)
     
 def tokenize(corpus_directory, tokenized_corpus_directory, tokenizer):
     def normalize(doc):
@@ -250,11 +250,16 @@ def merge_mm(model_directory, num_categories, mm_file_header):
 def do_kmeans(mm_fname, k_array, kmeans_n_jobs, DEBUG):
     def _do_kmeans(x, k):
         kmeans = KMeans(n_clusters=k, n_init=1, max_iter=15, n_jobs=kmeans_n_jobs)
-        return kmeans.fit_predict(x)
-    def _write_result(fname, labels):
+        labels = kmeans.fit_predict(x)
+        centers = kmeans.cluster_centers_
+        return labels, centers
+    def _write_labels(fname, labels):
         with open(fname, 'w', encoding='utf-8') as fo:
             for label in labels:
                 fo.write('{}\n'.format(label))
+    def _write_centers(fname, centers):
+        with open(fname, 'wb') as fo:
+            pickle.dump(centers, fo)
 
     model_directory = '/'.join(mm_fname.split('/')[:-1])
     mm_name = mm_fname.split('/')[-1][:-4]
@@ -264,9 +269,11 @@ def do_kmeans(mm_fname, k_array, kmeans_n_jobs, DEBUG):
         if DEBUG and i_k == 3:
             break
         print('  - k-means (tf) begin k={} ... '.format(k), flush=True, end='')
-        labels = _do_kmeans(x, k)
+        labels, centers = _do_kmeans(x, k)
         labels_fname = '{}/cluster_label_tf_{}_k{}.txt'.format(model_directory, mm_name, k)
-        _write_result(labels_fname, labels)
+        _write_labels(labels_fname, labels)
+        centers_fname = '{}/cluster_center_tf_{}_k{}.pkl'.format(model_directory, mm_name, k)
+        _write_centers(centers_fname, centers)
         print('done, mem={} Gb'.format('%.2f'%get_process_memory()), flush=True)
     
     # TFIDF 
@@ -276,79 +283,104 @@ def do_kmeans(mm_fname, k_array, kmeans_n_jobs, DEBUG):
         if DEBUG and i_k == 3:
             break
         print('  - k-means (tf-idf) begin k={} ... '.format(k), flush=True, end='')
-        labels = _do_kmeans(x, k)
+        labels, centers = _do_kmeans(x, k)
         labels_fname = '{}/cluster_label_tfidf_{}_k{}.txt'.format(model_directory, mm_name, k)
-        _write_result(labels_fname, labels)
+        _write_labels(labels_fname, labels)
+        centers_fname = '{}/cluster_center_tfidf_{}_k{}.pkl'.format(model_directory, mm_name, k)
+        _write_centers(centers_fname, centers)
         print('done, mem={} Gb'.format('%.2f'%get_process_memory()), flush=True)
 
-def indi_analysis(model_directory, mm_file_header, k_array, num_categories, weight_type, centroid_minimum_df_ratio=0.03, debug=False):
+def indi_analysis(model_directory, mm_file_header, k_array, num_categories, weight_type, proportion_minimum_df_ratio=0.03, DEBUG=False):
     group_by_k = {}
+    tf_center_by_k = defaultdict(lambda: [])
+    tfidf_center_by_k = defaultdict(lambda: [])
+    
     for c in range(num_categories):
-        if debug and c >= 3:
+        if DEBUG and c >= 3:
             break
         print('\r  - clustering analysis = {} / {} categories begin ...{}'.format(c, num_categories, ' '*20), flush=True)
         mm_fname = '{}/{}_c{}.mtx'.format(model_directory, mm_file_header, c)
         x = mmread(mm_fname).tocsr()
         n_vocabs = x.shape[1]
         
-        for k in k_array:
+        for i_k, k in enumerate(k_array):
+            if DEBUG and i_k == 3:
+                break
             print('\r    - analyzing k = {} in {}'.format(k, k_array), flush=True, end='')
             cluster_label_fname = '{}/cluster_label_{}_{}_c{}_k{}.txt'.format(model_directory, weight_type, mm_file_header, c, k)
             labels = _load_list(cluster_label_fname)
             
-            centroids, dfs, n_docs = group_by_k.get(k, ([], [], []))
-            centroids_k, dfs_k, n_docs_k = _make_summary(x, k, labels, centroid_minimum_df_ratio)
-            for c_i, df_i, nd_i in zip(centroids_k, dfs_k, n_docs_k):
-                centroids.append(c_i)
+            proportions, dfs, n_docs = group_by_k.get(k, ([], [], []))
+            proportions_k, dfs_k, n_docs_k = _make_proportion(x, k, labels, proportion_minimum_df_ratio)
+            for p_i, df_i, nd_i in zip(proportions_k, dfs_k, n_docs_k):
+                proportions.append(p_i)
                 dfs.append(df_i)
                 n_docs.append(nd_i)
-            group_by_k[k] = (centroids, dfs, n_docs)
+            group_by_k[k] = (proportions, dfs, n_docs)
+            
+            centers_fname = '{}/cluster_center_tf_{}_c{}_k{}.pkl'.format(model_directory, mm_file_header, c, k)
+            with open(centers_fname, 'rb') as f:
+                tf_center_by_k[k].append(pickle.load(f))
+                
+            centers_fname = '{}/cluster_center_tfidf_{}_c{}_k{}.pkl'.format(model_directory, mm_file_header, c, k)
+            with open(centers_fname, 'rb') as f:
+                tfidf_center_by_k[k].append(pickle.load(f))
     
     print('\r  - pickling ... {}'.format(' '*40), flush=True, end='')
     for k, args in group_by_k.items():
-        centroid_fname = '{}/centroids_{}_{}_k{}.pkl'.format(model_directory, weight_type, mm_file_header, k)
-        _packing(*args, n_vocabs, centroid_fname)
+        proportion_fname = '{}/proportions_{}_{}_k{}.pkl'.format(model_directory, weight_type, mm_file_header, k)
+        _packing(*args, n_vocabs, proportion_fname)
+    for k, center_list in tf_center_by_k.items():
+        x = np.concatenate(center_list)
+        centers_fname = '{}/cluster_center_tf_{}_k{}.pkl'.format(model_directory, mm_file_header, k)
+        with open(centers_fname, 'wb') as f:
+            pickle.dump(x, f)
+    for k, center_list in tfidf_center_by_k.items():
+        x = np.concatenate(center_list)
+        centers_fname = '{}/cluster_center_tfidf_{}_k{}.pkl'.format(model_directory, mm_file_header, k)
+        with open(centers_fname, 'wb') as f:
+            pickle.dump(x, f)
     print('\rdone{}'.format(' '*40), flush=True)
 
 def _get_rows_from_label(label, labels):
     return [i for i, label_i in enumerate(labels) if label_i == label]
 
-def _summary(x_sub, min_df):
+def _proportion(x_sub, min_df):
     n_docs, n_vocabs = x_sub.shape
     doc_norm = {}
     word_df = {}
     # calculate norm
     rows, cols = x_sub.nonzero()
     for i, j, v in zip(rows, cols, x_sub.data):
-        doc_norm[i] = doc_norm.get(i,0) + v**2
+        doc_norm[i] = doc_norm.get(i,0) + v
         word_df[j] = word_df.get(j, 0) + 1
     word_df = {j:df for j,df in word_df.items() if df >= min_df}
-    centroid = {}
+    proportion = {}
     # normalize
     for i, j, v in zip(rows, cols, x_sub.data):
         if not (j in word_df):
             continue
-        centroid[j] = centroid.get(j,0) + np.sqrt(v**2 / doc_norm[i])
-    # averaging for making centroid
-    centroid = {j:v/n_docs for j,v in centroid.items()}
-    return centroid, word_df, n_docs
+        proportion[j] = proportion.get(j,0) + (v / doc_norm[i])
+    # averaging for making proportion
+    proportion = {j:v/n_docs for j,v in proportion.items()}
+    return proportion, word_df, n_docs
 
-def _make_summary(x, n_clusters, labels, centroid_minimum_df_ratio):
-    centroids, dfs, n_docs = [], [], []    
+def _make_proportion(x, n_clusters, labels, proportion_minimum_df_ratio):
+    proportions, dfs, n_docs = [], [], []    
     for k in range(n_clusters):        
         rows = _get_rows_from_label(k, labels)
-        min_df = max(1, centroid_minimum_df_ratio * len(rows))
+        min_df = max(1, proportion_minimum_df_ratio * len(rows))
         x_sub = x[rows,:]
-        centroid_k, df_k, n_docs_k = _summary(x_sub, min_df)
-        centroids.append(centroid_k)
+        proportion_k, df_k, n_docs_k = _proportion(x_sub, min_df)
+        proportions.append(proportion_k)
         dfs.append(df_k)
         n_docs.append(n_docs_k)
-    return centroids, dfs, n_docs
+    return proportions, dfs, n_docs
 
-def _packing(centroids, dfs, n_docs, n_vocabs, fname):
-    x = _list_of_d_as_sparse(centroids, n_vocabs)
+def _packing(proportions, dfs, n_docs, n_vocabs, fname):
+    x = _list_of_d_as_sparse(proportions, n_vocabs)
     with open(fname, 'wb') as f:
-        pickle.dump({'centroid':x, 'dfs': dfs, 'n_docs':n_docs}, f)
+        pickle.dump({'proportion':x, 'dfs': dfs, 'n_docs':n_docs}, f)
     
 def _list_of_d_as_sparse(list_of_d, n_vocabs):
     rows, cols, data = [], [], []
