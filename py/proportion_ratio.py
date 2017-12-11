@@ -46,7 +46,7 @@ def compute_a_proportion_ratio(x, seed_nodes, context_nodes, minimum_proportion_
     return W_ij
 
 def row_labeling(x_frequency, minimum_proportion_ratio=0.7, minimum_frequency=10, verbose=False):
-    global_frequency = x.sum(axis=0).tolist()[0]
+    global_frequency = x_frequency.sum(axis=0).tolist()[0]
     global_sum = sum(global_frequency)
     
     W_ij = {}
