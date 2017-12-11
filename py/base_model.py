@@ -1,5 +1,6 @@
 import argparse
 import os
+import pickle
 from collections import Counter
 from collections import defaultdict
 from glob import glob
@@ -10,12 +11,16 @@ from sklearn.preprocessing import normalize
 from sklearn.feature_extraction.text import TfidfTransformer
 from konlpy.tag import Twitter
 from utils.utils import get_process_memory
-import warnings
+import numpy as np
+
+try:
+    import warnings
+    warnings.filterwarnings('ignore')
+except:
+    print('Package warning does not exist')
 
 
 def main():
-    warnings.filterwarnings('ignore')
-    
     parser = argparse.ArgumentParser()
     parser.add_argument('--model_directory', type=str, default='./base_model/', help='json file directory')
     parser.add_argument('--corpus_directory', type=str, default='./', help='corpus directory')
@@ -34,6 +39,10 @@ def main():
     parser.add_argument('--kmeans_n_jobs', type=int, default=4, help='minimum term frequency for each category')
     parser.add_argument('--k_array', type=str, default='2_5_10_20_50_100', help='k values 2_5_10 format')
 
+    parser.add_argument('--do_indi_analysis', dest='INDI_ANALYSIS', action='store_true')
+    parser.add_argument('--do_whole_analysis', dest='WHOLE_ANALYSIS', action='store_true')
+    parser.add_argument('--centroid_minimum_df_ratio', type=float, default=0.03, help='minimum document frequency ratio for centroid term frequency vector')
+    
     ###################
     #### PARAMETER ####
     args = parser.parse_args()
@@ -53,6 +62,10 @@ def main():
     KMEANS_WHOLE = args.KMEANS_WHOLE
     kmeans_n_jobs = args.kmeans_n_jobs
     k_array = [int(k) for k in args.k_array.split('_')]
+
+    INDI_ANALYSIS = args.INDI_ANALYSIS
+    WHOLE_ANALYSIS = args.WHOLE_ANALYSIS
+    centroid_minimum_df_ratio = args.centroid_minimum_df_ratio
     ###################
     
     print('{}\nArguments'.format('#'*80))
@@ -98,6 +111,12 @@ def main():
             merge_mm(model_directory, num_categories, mm_file_header)
         print('Do kmeans with merged term frequency matrix')
         do_kmeans(mm_whole_fname, k_array, kmeans_n_jobs, DEBUG)
+    
+    # make centroids
+    if INDI_ANALYSIS:
+        for weight_type in ['tf', 'tfidf']:
+            print('Do clustering result (indi) analysis {}'.format(weight_type))
+            indi_analysis(model_directory, mm_file_header, k_array, num_categories, weight_type, centroid_minimum_df_ratio, DEBUG)
     
 def tokenize(corpus_directory, tokenized_corpus_directory, tokenizer):
     def normalize(doc):
@@ -261,6 +280,90 @@ def do_kmeans(mm_fname, k_array, kmeans_n_jobs, DEBUG):
         labels_fname = '{}/cluster_label_tfidf_{}_k{}.txt'.format(model_directory, mm_name, k)
         _write_result(labels_fname, labels)
         print('done, mem={} Gb'.format('%.2f'%get_process_memory()), flush=True)
+
+def indi_analysis(model_directory, mm_file_header, k_array, num_categories, weight_type, centroid_minimum_df_ratio=0.03, debug=False):
+    group_by_k = {}
+    for c in range(num_categories):
+        if debug and c >= 3:
+            break
+        print('\r  - clustering analysis = {} / {} categories begin ...{}'.format(c, num_categories, ' '*20), flush=True)
+        mm_fname = '{}/{}_c{}.mtx'.format(model_directory, mm_file_header, c)
+        x = mmread(mm_fname).tocsr()
+        n_vocabs = x.shape[1]
+        
+        for k in k_array:
+            print('\r    - analyzing k = {} in {}'.format(k, k_array), flush=True, end='')
+            cluster_label_fname = '{}/cluster_label_{}_{}_c{}_k{}.txt'.format(model_directory, weight_type, mm_file_header, c, k)
+            labels = _load_list(cluster_label_fname)
+            
+            centroids, dfs, n_docs = group_by_k.get(k, ([], [], []))
+            centroids_k, dfs_k, n_docs_k = _make_summary(x, k, labels, centroid_minimum_df_ratio)
+            for c_i, df_i, nd_i in zip(centroids_k, dfs_k, n_docs_k):
+                centroids.append(c_i)
+                dfs.append(df_i)
+                n_docs.append(nd_i)
+            group_by_k[k] = (centroids, dfs, n_docs)
+    
+    print('\r  - pickling ... {}'.format(' '*40), flush=True, end='')
+    for k, args in group_by_k.items():
+        centroid_fname = '{}/centroids_{}_{}_k{}.pkl'.format(model_directory, weight_type, mm_file_header, k)
+        _packing(*args, n_vocabs, centroid_fname)
+    print('\rdone{}'.format(' '*40), flush=True)
+
+def _get_rows_from_label(label, labels):
+    return [i for i, label_i in enumerate(labels) if label_i == label]
+
+def _summary(x_sub, min_df):
+    n_docs, n_vocabs = x_sub.shape
+    doc_norm = {}
+    word_df = {}
+    # calculate norm
+    rows, cols = x_sub.nonzero()
+    for i, j, v in zip(rows, cols, x_sub.data):
+        doc_norm[i] = doc_norm.get(i,0) + v**2
+        word_df[j] = word_df.get(j, 0) + 1
+    word_df = {j:df for j,df in word_df.items() if df >= min_df}
+    centroid = {}
+    # normalize
+    for i, j, v in zip(rows, cols, x_sub.data):
+        if not (j in word_df):
+            continue
+        centroid[j] = centroid.get(j,0) + np.sqrt(v**2 / doc_norm[i])
+    # averaging for making centroid
+    centroid = {j:v/n_docs for j,v in centroid.items()}
+    return centroid, word_df, n_docs
+
+def _make_summary(x, n_clusters, labels, centroid_minimum_df_ratio):
+    centroids, dfs, n_docs = [], [], []    
+    for k in range(n_clusters):        
+        rows = _get_rows_from_label(k, labels)
+        min_df = max(1, centroid_minimum_df_ratio * len(rows))
+        x_sub = x[rows,:]
+        centroid_k, df_k, n_docs_k = _summary(x_sub, min_df)
+        centroids.append(centroid_k)
+        dfs.append(df_k)
+        n_docs.append(n_docs_k)
+    return centroids, dfs, n_docs
+
+def _packing(centroids, dfs, n_docs, n_vocabs, fname):
+    x = _list_of_d_as_sparse(centroids, n_vocabs)
+    with open(fname, 'wb') as f:
+        pickle.dump({'centroid':x, 'dfs': dfs, 'n_docs':n_docs}, f)
+    
+def _list_of_d_as_sparse(list_of_d, n_vocabs):
+    rows, cols, data = [], [], []
+    n_docs = len(list_of_d)
+    for i, j_dict in enumerate(list_of_d):
+        for j, v in j_dict.items():
+            rows.append(i)
+            cols.append(j)
+            data.append(v)
+    return csr_matrix((data, (rows, cols)),shape=(n_docs, n_vocabs))
+
+def _load_list(fname):
+    with open(fname, encoding='utf-8') as f:
+        docs = [int(doc.strip()) for doc in f]
+    return docs
 
 if __name__ == '__main__':
     main()
