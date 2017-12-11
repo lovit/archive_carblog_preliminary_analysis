@@ -9,7 +9,7 @@ from sklearn.cluster import KMeans
 from sklearn.preprocessing import normalize
 from sklearn.feature_extraction.text import TfidfTransformer
 from konlpy.tag import Twitter
-from utils import get_process_memory
+from utils.utils import get_process_memory
 import warnings
 
 
