@@ -30,6 +30,7 @@ def main():
     parser.add_argument('--tokenized_corpus_directory', type=str, default='./', help='tokenized corpus directory')
     parser.add_argument('--tokenizer_name', type=str, default='twitter', help='tokenizer name', choices=['twitter'])
     parser.add_argument('--mm_file_header', type=str, default='base', help='file header of mm. eg) base_c3.mtx')
+    parser.add_argument('--output_header', type=str, default='', help='file header of output')
     parser.add_argument('--do_build_mm', dest='BUILD_MM', action='store_true')
     parser.add_argument('--do_merge_mm', dest='MERGE_MM', action='store_true')
     parser.add_argument('--min_tf', type=int, default=50, help='minimum term frequency for each category')
@@ -54,6 +55,7 @@ def main():
     tokenized_corpus_directory = args.tokenized_corpus_directory
     tokenizer_name = args.tokenizer_name
     mm_file_header = args.mm_file_header
+    output_header = args.output_header
     min_tf = args.min_tf
     BUILD_MM = args.BUILD_MM
     MERGE_MM = args.MERGE_MM
@@ -99,7 +101,7 @@ def main():
                 break
             mm_indi_fname = '{}/{}_c{}.mtx'.format(model_directory, mm_file_header, c)
             print('Do kmeans with category = {}'.format(c))
-            do_kmeans(mm_indi_fname, k_array, kmeans_n_jobs, DEBUG)
+            do_kmeans(mm_indi_fname, k_array, kmeans_n_jobs, DEBUG, output_header)
     
     # Merge corpus
     if KMEANS_WHOLE:
@@ -110,13 +112,13 @@ def main():
                 return None
             merge_mm(model_directory, num_categories, mm_file_header)
         print('Do kmeans with merged x')
-        do_kmeans(mm_whole_fname, k_array, kmeans_n_jobs, DEBUG)
+        do_kmeans(mm_whole_fname, k_array, kmeans_n_jobs, DEBUG, output_header)
     
     # make proportion
     if INDI_ANALYSIS:
         for weight_type in ['tf', 'tfidf']:
             print('Do clustering result (indi) analysis {}'.format(weight_type))
-            indi_analysis(model_directory, mm_file_header, k_array, num_categories, weight_type, proportion_minimum_df_ratio, DEBUG)
+            indi_analysis(model_directory, mm_file_header, k_array, num_categories, weight_type, proportion_minimum_df_ratio, DEBUG, output_header)
     
 def tokenize(corpus_directory, tokenized_corpus_directory, tokenizer):
     def normalize(doc):
@@ -247,7 +249,7 @@ def merge_mm(model_directory, num_categories, mm_file_header):
             print('  - merged {}'.format(indi_mm_fname))
     print('All corpus was merged')
 
-def do_kmeans(mm_fname, k_array, kmeans_n_jobs, DEBUG):
+def do_kmeans(mm_fname, k_array, kmeans_n_jobs, DEBUG, output_header):
     def _do_kmeans(x, k):
         kmeans = KMeans(n_clusters=k, n_init=1, max_iter=15, n_jobs=kmeans_n_jobs)
         labels = kmeans.fit_predict(x)
@@ -265,14 +267,17 @@ def do_kmeans(mm_fname, k_array, kmeans_n_jobs, DEBUG):
     mm_name = mm_fname.split('/')[-1][:-4]
     # TF    
     x = mmread(mm_fname)
+    if output_header:
+        output_header += '_'
+        
     for i_k, k in enumerate(k_array):
         if DEBUG and i_k == 3:
             break
         print('  - k-means (tf) begin k={} ... '.format(k), flush=True, end='')
         labels, centers = _do_kmeans(x, k)
-        labels_fname = '{}/cluster_label_tf_{}_k{}.txt'.format(model_directory, mm_name, k)
+        labels_fname = '{}/cluster_label_tf_{}_{}k{}.txt'.format(model_directory, mm_name, output_header, k)
         _write_labels(labels_fname, labels)
-        centers_fname = '{}/cluster_center_tf_{}_k{}.pkl'.format(model_directory, mm_name, k)
+        centers_fname = '{}/cluster_center_tf_{}_{}k{}.pkl'.format(model_directory, mm_name, output_header, k)
         _write_centers(centers_fname, centers)
         print('done, mem={} Gb'.format('%.2f'%get_process_memory()), flush=True)
     
@@ -284,16 +289,19 @@ def do_kmeans(mm_fname, k_array, kmeans_n_jobs, DEBUG):
             break
         print('  - k-means (tf-idf) begin k={} ... '.format(k), flush=True, end='')
         labels, centers = _do_kmeans(x, k)
-        labels_fname = '{}/cluster_label_tfidf_{}_k{}.txt'.format(model_directory, mm_name, k)
+        labels_fname = '{}/cluster_label_tfidf_{}_{}k{}.txt'.format(model_directory, mm_name, output_header, k)
         _write_labels(labels_fname, labels)
-        centers_fname = '{}/cluster_center_tfidf_{}_k{}.pkl'.format(model_directory, mm_name, k)
+        centers_fname = '{}/cluster_center_tfidf_{}_{}k{}.pkl'.format(model_directory, mm_name, output_header, k)
         _write_centers(centers_fname, centers)
         print('done, mem={} Gb'.format('%.2f'%get_process_memory()), flush=True)
 
-def indi_analysis(model_directory, mm_file_header, k_array, num_categories, weight_type, proportion_minimum_df_ratio=0.03, DEBUG=False):
+def indi_analysis(model_directory, mm_file_header, k_array, num_categories, weight_type, proportion_minimum_df_ratio=0.03, DEBUG=False, output_header=''):
     group_by_k = {}
     tf_center_by_k = defaultdict(lambda: [])
     tfidf_center_by_k = defaultdict(lambda: [])
+    
+    if output_header:
+        output_header += '_'
     
     for c in range(num_categories):
         if DEBUG and c >= 3:
@@ -307,7 +315,7 @@ def indi_analysis(model_directory, mm_file_header, k_array, num_categories, weig
             if DEBUG and i_k == 3:
                 break
             print('\r    - analyzing k = {} in {}'.format(k, k_array), flush=True, end='')
-            cluster_label_fname = '{}/cluster_label_{}_{}_c{}_k{}.txt'.format(model_directory, weight_type, mm_file_header, c, k)
+            cluster_label_fname = '{}/cluster_label_{}_{}_c{}_{}k{}.txt'.format(model_directory, weight_type, mm_file_header, c, output_header, k)
             labels = _load_list(cluster_label_fname)
             
             proportions, dfs, n_docs = group_by_k.get(k, ([], [], []))
@@ -318,26 +326,26 @@ def indi_analysis(model_directory, mm_file_header, k_array, num_categories, weig
                 n_docs.append(nd_i)
             group_by_k[k] = (proportions, dfs, n_docs)
             
-            centers_fname = '{}/cluster_center_tf_{}_c{}_k{}.pkl'.format(model_directory, mm_file_header, c, k)
+            centers_fname = '{}/cluster_center_tf_{}_c{}_{}k{}.pkl'.format(model_directory, mm_file_header, c, output_header, k)
             with open(centers_fname, 'rb') as f:
                 tf_center_by_k[k].append(pickle.load(f))
                 
-            centers_fname = '{}/cluster_center_tfidf_{}_c{}_k{}.pkl'.format(model_directory, mm_file_header, c, k)
+            centers_fname = '{}/cluster_center_tfidf_{}_c{}_{}k{}.pkl'.format(model_directory, mm_file_header, c, output_header, k)
             with open(centers_fname, 'rb') as f:
                 tfidf_center_by_k[k].append(pickle.load(f))
     
     print('\r  - pickling ... {}'.format(' '*40), flush=True, end='')
     for k, args in group_by_k.items():
-        proportion_fname = '{}/proportions_{}_{}_k{}.pkl'.format(model_directory, weight_type, mm_file_header, k)
+        proportion_fname = '{}/proportions_{}_{}_{}k{}.pkl'.format(model_directory, weight_type, mm_file_header, output_header, k)
         _packing(*args, n_vocabs, proportion_fname)
     for k, center_list in tf_center_by_k.items():
         x = np.concatenate(center_list)
-        centers_fname = '{}/cluster_center_tf_{}_k{}.pkl'.format(model_directory, mm_file_header, k)
+        centers_fname = '{}/cluster_center_tf_{}_{}k{}.pkl'.format(model_directory, mm_file_header, output_header, k)
         with open(centers_fname, 'wb') as f:
             pickle.dump(x, f)
     for k, center_list in tfidf_center_by_k.items():
         x = np.concatenate(center_list)
-        centers_fname = '{}/cluster_center_tfidf_{}_k{}.pkl'.format(model_directory, mm_file_header, k)
+        centers_fname = '{}/cluster_center_tfidf_{}_{}k{}.pkl'.format(model_directory, mm_file_header, output_header, k)
         with open(centers_fname, 'wb') as f:
             pickle.dump(x, f)
     print('\rdone{}'.format(' '*40), flush=True)
